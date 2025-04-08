@@ -42,8 +42,40 @@ func handleGetOne(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleSetMany(w http.ResponseWriter, r *http.Request) {
-	env := r.PathValue("env")
+	env := config.Env(r.PathValue("env"))
 	log.Printf("Serving request for setting configuration value for env: %s\n", env)
+
+	var payload map[string]string
+	err := json.NewDecoder(r.Body).Decode(&payload)
+	if err != nil {
+		log.Printf("There was an error decoding the request payload: %v\n", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// TODO: Consider implementing a transactional API.
+
+	type response struct {
+		Success bool     `json:"success"`
+		Errors  []string `json:"errors"`
+	}
+
+	errors := make([]string, 0)
+
+	for key, value := range payload {
+		err := config.Set(env, key, value)
+		if err != nil {
+			log.Printf("Failed to set value in env (%s): %s = %s\n", env, key, value)
+			errors = append(errors, key)
+		}
+	}
+
+	res := response{
+		Success: len(errors) == 0,
+		Errors:  errors,
+	}
+
+	json.NewEncoder(w).Encode(res)
 }
 
 func main() {
