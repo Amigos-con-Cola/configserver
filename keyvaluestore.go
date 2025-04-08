@@ -6,6 +6,9 @@ type KeyValueStore interface {
 
 	/// Get the value associated to the specified key.
 	Get(key string) (string, bool)
+
+	/// Clear the store.
+	Clear()
 }
 
 // / A KeyValueStored that stores configuration in volatile memory.
@@ -21,6 +24,12 @@ func (im *InMemoryKeyValueStore) Set(key string, value string) error {
 func (im *InMemoryKeyValueStore) Get(key string) (string, bool) {
 	value, ok := im.store[key]
 	return value, ok
+}
+
+func (im *InMemoryKeyValueStore) Clear() {
+	for k := range im.store {
+		delete(im.store, k)
+	}
 }
 
 func NewDefaultKeyValueStore() KeyValueStore {
