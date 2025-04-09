@@ -4,9 +4,32 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/Amigos-con-Cola/config"
 )
+
+var (
+	configServerUsername string
+	configServerPassword string
+)
+
+func authMiddleware(wrapped func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if username != configServerUsername || password != configServerPassword {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		wrapped(w, r)
+	}
+}
 
 func handleGetAll(w http.ResponseWriter, r *http.Request) {
 	env := r.PathValue("env")
@@ -79,9 +102,19 @@ func handleSetMany(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("POST /api/v1/{env}", handleSetMany)
-	http.HandleFunc("GET /api/v1/{env}", handleGetAll)
-	http.HandleFunc("GET /api/v1/{env}/{key}", handleGetOne)
+	configServerUsername = os.Getenv("CONFIG_SERVER_USERNAME")
+	if configServerUsername == "" {
+		log.Fatalf("CONFIG_SERVER_USERNAME is not set")
+	}
+
+	configServerPassword = os.Getenv("CONFIG_SERVER_PASSWORD")
+	if configServerPassword == "" {
+		log.Fatalf("CONFIG_SERVER_PASSWORD is not set")
+	}
+
+	http.HandleFunc("POST /api/v1/{env}", authMiddleware(handleSetMany))
+	http.HandleFunc("GET /api/v1/{env}", authMiddleware(handleGetAll))
+	http.HandleFunc("GET /api/v1/{env}/{key}", authMiddleware(handleGetOne))
 
 	log.Fatal(http.ListenAndServe(":3000", nil))
 }
