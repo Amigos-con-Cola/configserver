@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	configServerUsername string
-	configServerPassword string
+	ConfigServerUsername string
+	ConfigServerPassword string
 )
 
 func authMiddleware(wrapped func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
@@ -22,7 +22,7 @@ func authMiddleware(wrapped func(http.ResponseWriter, *http.Request)) func(http.
 			return
 		}
 
-		if username != configServerUsername || password != configServerPassword {
+		if username != ConfigServerUsername || password != ConfigServerPassword {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -101,20 +101,32 @@ func handleSetMany(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
+func mkServer() *http.Server {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("POST /api/v1/{env}", authMiddleware(handleSetMany))
+	mux.HandleFunc("GET /api/v1/{env}", authMiddleware(handleGetAll))
+	mux.HandleFunc("GET /api/v1/{env}/{key}", authMiddleware(handleGetOne))
+
+	s := &http.Server{
+		Addr:    ":3000",
+		Handler: mux,
+	}
+
+	return s
+}
+
 func main() {
-	configServerUsername = os.Getenv("CONFIG_SERVER_USERNAME")
-	if configServerUsername == "" {
+	ConfigServerUsername = os.Getenv("CONFIG_SERVER_USERNAME")
+	if ConfigServerUsername == "" {
 		log.Fatalf("CONFIG_SERVER_USERNAME is not set")
 	}
 
-	configServerPassword = os.Getenv("CONFIG_SERVER_PASSWORD")
-	if configServerPassword == "" {
+	ConfigServerPassword = os.Getenv("CONFIG_SERVER_PASSWORD")
+	if ConfigServerPassword == "" {
 		log.Fatalf("CONFIG_SERVER_PASSWORD is not set")
 	}
 
-	http.HandleFunc("POST /api/v1/{env}", authMiddleware(handleSetMany))
-	http.HandleFunc("GET /api/v1/{env}", authMiddleware(handleGetAll))
-	http.HandleFunc("GET /api/v1/{env}/{key}", authMiddleware(handleGetOne))
-
-	log.Fatal(http.ListenAndServe(":3000", nil))
+	s := mkServer()
+	log.Fatal(s.ListenAndServe())
 }
